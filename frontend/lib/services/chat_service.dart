@@ -39,7 +39,26 @@ class ToolResultData {
 }
 
 class ChatService {
-  static const String _baseWsUrl = 'ws://localhost:8000';
+  static const String _apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8000/api',
+  );
+
+  // Derive WebSocket URL from API base URL
+  static String get _baseWsUrl {
+    var url = _apiBaseUrl;
+    // Remove /api suffix if present
+    if (url.endsWith('/api')) {
+      url = url.substring(0, url.length - 4);
+    }
+    // Convert http(s) to ws(s)
+    if (url.startsWith('https://')) {
+      return url.replaceFirst('https://', 'wss://');
+    } else if (url.startsWith('http://')) {
+      return url.replaceFirst('http://', 'ws://');
+    }
+    return url;
+  }
 
   WebSocketChannel? _channel;
   final _messageController = StreamController<ChatMessage>.broadcast();

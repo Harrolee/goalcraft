@@ -3,14 +3,17 @@ import '../models/goal.dart';
 import '../models/milestone.dart';
 
 class ApiService {
-  static const String _baseUrl = 'http://localhost:8000/api';
+  static const String _apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:8000/api',
+  );
 
   final Dio _dio;
 
   ApiService({Dio? dio})
       : _dio = dio ??
             Dio(BaseOptions(
-              baseUrl: _baseUrl,
+              baseUrl: _apiBaseUrl,
               connectTimeout: const Duration(seconds: 30),
               receiveTimeout: const Duration(seconds: 30),
               headers: {
