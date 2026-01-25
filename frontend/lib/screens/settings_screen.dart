@@ -428,8 +428,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final apiService = ref.read(apiServiceProvider);
 
     // The redirect URI for the OAuth flow
-    // For web, we use a page that will handle the callback
-    const redirectUri = 'http://localhost:3001/auth/google/callback';
+    // Detect if running locally or in production
+    final currentUri = Uri.base;
+    final isLocal = currentUri.host == 'localhost' || currentUri.host == '127.0.0.1';
+    final redirectUri = isLocal
+        ? 'http://localhost:3001/auth/google/callback'
+        : 'https://harrolee.github.io/goalcraft/auth/google/callback';
 
     try {
       // Get the authorization URL from the backend

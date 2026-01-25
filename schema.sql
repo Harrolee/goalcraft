@@ -13,6 +13,7 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     google_refresh_token TEXT,
+    google_calendar_id VARCHAR(255),
     phone_number VARCHAR(20),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -40,6 +41,7 @@ CREATE TABLE milestones (
     due_date TIMESTAMP WITH TIME ZONE,
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'skipped')),
     "order" INTEGER DEFAULT 0,
+    calendar_event_id VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
