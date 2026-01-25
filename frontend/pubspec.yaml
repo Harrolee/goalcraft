@@ -1,0 +1,34 @@
+name: goalcraft
+description: A goal planning app with AI-powered milestone generation.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  flutter_riverpod: ^2.4.9
+  go_router: ^13.0.0
+  dio: ^5.4.0
+  web_socket_channel: ^2.4.0
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+  intl: ^0.18.1
+  flutter_markdown: ^0.6.18
+  url_launcher: ^6.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+  build_runner: ^2.4.8
+  mocktail: ^1.0.3
+  http_mock_adapter: ^0.6.1
+
+flutter:
+  uses-material-design: true

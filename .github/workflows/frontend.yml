@@ -1,0 +1,94 @@
+# GitHub Actions workflow for deploying GoalCraft frontend to Cloudflare Pages
+#
+# This workflow:
+# 1. Triggers on push to main branch when frontend files change
+# 2. Builds the Flutter web application
+# 3. Deploys to Cloudflare Pages
+#
+# Required GitHub Secrets:
+#   CLOUDFLARE_API_TOKEN - Cloudflare API token with Pages permissions
+#   CLOUDFLARE_ACCOUNT_ID - Cloudflare account ID
+#   API_BASE_URL - Backend API URL (e.g., https://goalcraft-backend-xxxxx.run.app)
+#
+# Setup Instructions:
+# 1. Create a Cloudflare Pages project named 'goalcraft'
+# 2. Generate an API token with 'Cloudflare Pages:Edit' permission
+# 3. Add GitHub secrets with the values above
+
+name: Deploy Frontend to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  FLUTTER_VERSION: '3.16.0'
+  PROJECT_NAME: goalcraft
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Analyze code
+        working-directory: frontend
+        run: flutter analyze --no-fatal-infos
+        continue-on-error: true
+
+      - name: Run tests
+        working-directory: frontend
+        run: flutter test
+        continue-on-error: true
+
+      - name: Build Flutter Web
+        working-directory: frontend
+        run: |
+          flutter build web --release \
+            --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }}
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+
+      - name: Verify build output
+        working-directory: frontend
+        run: |
+          if [ ! -d "build/web" ]; then
+            echo "Build failed: build/web directory not found"
+            exit 1
+          fi
+          echo "Build contents:"
+          ls -la build/web/
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ${{ env.PROJECT_NAME }}
+          directory: frontend/build/web
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          wranglerVersion: '3'
+
+      - name: Deployment Summary
+        run: |
+          echo "Frontend deployed to Cloudflare Pages!"
+          echo "Production URL: https://${{ env.PROJECT_NAME }}.pages.dev"

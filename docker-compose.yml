@@ -1,0 +1,103 @@
+# Docker Compose configuration for GoalCraft local development
+#
+# This configuration sets up:
+# - FastAPI backend service with hot reload
+# - PostgreSQL database (local development, production uses Neon)
+#
+# Usage:
+#   docker-compose up -d        # Start all services
+#   docker-compose logs -f      # View logs
+#   docker-compose down         # Stop all services
+#   docker-compose down -v      # Stop and remove volumes
+#
+# Prerequisites:
+#   - Create backend/.env file with required environment variables
+#   - See backend/.env.example for template
+
+version: '3.8'
+
+services:
+  # FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: goalcraft-backend
+    ports:
+      - "8000:8080"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Database connection (uses local postgres for development)
+      - DATABASE_URL=postgresql://goalcraft:goalcraft_dev_password@postgres:5432/goalcraft
+      # Environment
+      - ENVIRONMENT=development
+    volumes:
+      # Mount source code for hot reload
+      - ./backend/app:/app/app:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - goalcraft-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database (local development only)
+  postgres:
+    image: postgres:15-alpine
+    container_name: goalcraft-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=goalcraft
+      - POSTGRES_PASSWORD=goalcraft_dev_password
+      - POSTGRES_DB=goalcraft
+    volumes:
+      # Persist database data
+      - postgres_data:/var/lib/postgresql/data
+      # Initialize schema on first run
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    restart: unless-stopped
+    networks:
+      - goalcraft-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goalcraft -d goalcraft"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: goalcraft-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@goalcraft.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - goalcraft-network
+    profiles:
+      - debug  # Only start with: docker-compose --profile debug up
+
+networks:
+  goalcraft-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local

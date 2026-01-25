@@ -1,0 +1,44 @@
+# Virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files (secrets loaded from GCP Secret Manager)
+.env
+.env.local
+.env.*.local
+
+# Test files
+tests/
+pytest.ini
+.coverage
+htmlcov/
+
+# Git
+.git/
+.gitignore
+
+# Build artifacts
+*.log
+*.tmp
+
+# Documentation
+*.md
+!README.md
+
+# Local scripts
+scripts/
