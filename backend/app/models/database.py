@@ -1,3 +1,5 @@
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from typing import AsyncGenerator
@@ -11,13 +13,48 @@ class Base(DeclarativeBase):
 
 
 def get_async_database_url() -> str:
-    """Convert standard postgres URL to asyncpg URL."""
+    """Convert standard postgres URL to asyncpg URL.
+
+    Handles conversion of psycopg2-style parameters to asyncpg-compatible ones.
+    Specifically converts sslmode=require to ssl=require for asyncpg.
+    """
     url = get_settings().DATABASE_URL
+
     # Replace postgresql:// with postgresql+asyncpg://
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+    # Parse URL to handle query parameters
+    parsed = urlparse(url)
+
+    if parsed.query:
+        # Parse query parameters
+        params = parse_qs(parsed.query)
+
+        # Convert sslmode to ssl for asyncpg
+        if 'sslmode' in params:
+            sslmode = params.pop('sslmode')[0]
+            if sslmode in ('require', 'verify-ca', 'verify-full'):
+                params['ssl'] = ['require']
+
+        # Remove channel_binding as asyncpg handles this differently
+        params.pop('channel_binding', None)
+
+        # Rebuild query string (flatten single-item lists)
+        new_query = urlencode({k: v[0] if len(v) == 1 else v for k, v in params.items()})
+
+        # Reconstruct URL
+        url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
+
     return url
 
 
