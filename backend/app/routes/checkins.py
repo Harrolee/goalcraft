@@ -12,29 +12,18 @@ goal progress and records their responses for AI coaching analysis.
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.vapi_service import get_vapi_service, VapiService
+from app.models.database import get_db
+from app.models.schemas import CheckIn, CheckInStatus, Milestone, Goal
+from app.services.vapi_service import get_vapi_service, VapiService, CallResult
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/check-ins", tags=["check-ins"])
-
-
-def get_db():
-    """
-    Database session dependency.
-    Replace this with your actual database session factory.
-    """
-    # This is a placeholder - replace with your actual implementation
-    # Example:
-    # from app.database import SessionLocal
-    # db = SessionLocal()
-    # try:
-    #     yield db
-    # finally:
-    #     db.close()
-    raise NotImplementedError("Replace with your actual database session dependency")
 
 
 async def initiate_checkin_call(
@@ -45,7 +34,7 @@ async def initiate_checkin_call(
     milestone_title: str,
     milestone_id: int,
     due_date: datetime,
-) -> bool:
+) -> CallResult:
     """
     Initiate a check-in voice call via VAPI.
 
@@ -61,7 +50,7 @@ async def initiate_checkin_call(
     Returns:
         True if the call was initiated successfully, False otherwise
     """
-    result = await vapi_service.initiate_checkin_call(
+    return await vapi_service.initiate_checkin_call(
         to_number=to_number,
         user_name=user_name,
         goal_title=goal_title,
@@ -70,18 +59,11 @@ async def initiate_checkin_call(
         due_date=due_date,
     )
 
-    if result.success:
-        logger.info(f"Check-in call initiated. Call ID: {result.call_id}")
-        return True
-    else:
-        logger.error(f"Failed to initiate check-in call: {result.error}")
-        return False
-
 
 @router.post("/trigger")
 async def trigger_checkins(
     request: Request,
-    # db: Session = Depends(get_db)  # Uncomment when database is configured
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Trigger check-in processing for all due check-ins.
@@ -110,50 +92,55 @@ async def trigger_checkins(
         # Get VAPI service
         vapi_service = get_vapi_service()
 
-        # Example query structure - adjust to your actual models
-        # Find due check-ins:
-        # - scheduled_at <= now
-        # - status = 'pending'
-        # - user has phone number and notifications enabled
-
-        """
-        due_checkins = db.query(CheckIn).join(User).join(Goal).filter(
-            and_(
-                CheckIn.scheduled_at <= now,
-                CheckIn.status == 'pending',
-                User.phone_number.isnot(None),
-                User.notifications_enabled == True
+        result = await db.execute(
+            select(CheckIn)
+            .join(CheckIn.milestone)
+            .join(Milestone.goal)
+            .join(Goal.user)
+            .options(
+                selectinload(CheckIn.milestone)
+                .selectinload(Milestone.goal)
+                .selectinload(Goal.user)
             )
-        ).all()
+            .where(CheckIn.scheduled_at <= now, CheckIn.status == CheckInStatus.PENDING)
+        )
+        due_checkins = result.scalars().unique().all()
 
         processed = 0
         failed = 0
 
         for checkin in due_checkins:
-            user = checkin.goal.user
-            goal = checkin.goal
             milestone = checkin.milestone
+            goal = milestone.goal
+            user = goal.user
 
-            # Initiate VAPI voice call
-            success = await initiate_checkin_call(
+            if not user or not user.phone_number or not milestone.due_date:
+                checkin.status = CheckInStatus.FAILED
+                failed += 1
+                continue
+
+            user_name = user.email.split("@")[0] if user.email else "there"
+
+            call_result = await initiate_checkin_call(
                 vapi_service=vapi_service,
                 to_number=user.phone_number,
-                user_name=user.name,
+                user_name=user_name,
                 goal_title=goal.title,
                 milestone_title=milestone.title,
                 milestone_id=milestone.id,
                 due_date=milestone.due_date,
             )
 
-            if success:
-                checkin.status = 'calling'
-                checkin.call_initiated_at = now
+            if call_result.success:
+                checkin.status = CheckInStatus.CALLING
+                checkin.sent_at = now
+                checkin.call_id = call_result.call_id
                 processed += 1
             else:
-                checkin.status = 'failed'
+                checkin.status = CheckInStatus.FAILED
                 failed += 1
 
-        db.commit()
+        await db.commit()
 
         logger.info(f"Check-in processing complete. Processed: {processed}, Failed: {failed}")
 
@@ -161,15 +148,7 @@ async def trigger_checkins(
             "status": "success",
             "processed": processed,
             "failed": failed,
-            "timestamp": now.isoformat()
-        }
-        """
-
-        # Placeholder response until database is configured
-        return {
-            "status": "success",
-            "message": "Check-in trigger received (database not configured)",
-            "timestamp": now.isoformat()
+            "timestamp": now.isoformat(),
         }
 
     except Exception as e:
@@ -184,7 +163,7 @@ async def trigger_checkins(
 async def trigger_single_checkin(
     milestone_id: int,
     request: Request,
-    # db: Session = Depends(get_db)  # Uncomment when database is configured
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Trigger a check-in call for a specific milestone.
@@ -203,42 +182,57 @@ async def trigger_single_checkin(
     try:
         vapi_service = get_vapi_service()
 
-        # Example implementation - adjust to your actual models
-        """
-        milestone = db.query(Milestone).get(milestone_id)
+        result = await db.execute(
+            select(Milestone)
+            .join(Milestone.goal)
+            .join(Goal.user)
+            .options(selectinload(Milestone.goal).selectinload(Goal.user))
+            .where(Milestone.id == milestone_id)
+        )
+        milestone = result.scalar_one_or_none()
         if not milestone:
             raise HTTPException(status_code=404, detail="Milestone not found")
 
         goal = milestone.goal
-        user = goal.user
+        user = goal.user if goal else None
 
-        if not user.phone_number:
-            raise HTTPException(status_code=400, detail="User has no phone number")
+        if not user or not user.phone_number or not milestone.due_date:
+            raise HTTPException(status_code=400, detail="User phone number or due date missing")
 
-        result = await vapi_service.initiate_checkin_call(
+        user_name = user.email.split("@")[0] if user.email else "there"
+
+        checkin = CheckIn(
+            milestone_id=milestone.id,
+            scheduled_at=datetime.utcnow(),
+            status=CheckInStatus.PENDING,
+        )
+        db.add(checkin)
+        await db.commit()
+        await db.refresh(checkin)
+
+        call_result = await vapi_service.initiate_checkin_call(
             to_number=user.phone_number,
-            user_name=user.name,
+            user_name=user_name,
             goal_title=goal.title,
             milestone_title=milestone.title,
             milestone_id=milestone.id,
             due_date=milestone.due_date,
         )
 
-        if result.success:
+        if call_result.success:
+            checkin.status = CheckInStatus.CALLING
+            checkin.sent_at = datetime.utcnow()
+            checkin.call_id = call_result.call_id
+            await db.commit()
             return {
                 "status": "success",
-                "call_id": result.call_id,
+                "call_id": call_result.call_id,
                 "milestone_id": milestone_id,
             }
-        else:
-            raise HTTPException(status_code=500, detail=result.error)
-        """
 
-        # Placeholder response until database is configured
-        return {
-            "status": "success",
-            "message": f"Would initiate call for milestone {milestone_id} (database not configured)",
-        }
+        checkin.status = CheckInStatus.FAILED
+        await db.commit()
+        raise HTTPException(status_code=500, detail=call_result.error)
 
     except HTTPException:
         raise

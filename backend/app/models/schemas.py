@@ -23,12 +23,21 @@ class ChatRole(str, enum.Enum):
     SYSTEM = "system"
 
 
+class CheckInStatus(str, enum.Enum):
+    """Status of a scheduled check-in."""
+    PENDING = "pending"
+    CALLING = "calling"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class User(Base):
     """User model for storing user information."""
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    auth0_id: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True, index=True)
     google_refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     google_calendar_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
@@ -127,8 +136,14 @@ class CheckIn(Base):
     milestone_id: Mapped[int] = mapped_column(
         ForeignKey("milestones.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    status: Mapped[CheckInStatus] = mapped_column(
+        Enum(CheckInStatus, values_callable=lambda x: [e.value for e in x], native_enum=False),
+        default=CheckInStatus.PENDING,
+        nullable=False,
+    )
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    call_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

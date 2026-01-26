@@ -7,10 +7,11 @@ class ApiService {
     'API_BASE_URL',
     defaultValue: 'http://localhost:8000/api',
   );
+  static String get apiBaseUrl => _apiBaseUrl;
 
   final Dio _dio;
 
-  ApiService({Dio? dio})
+  ApiService({Dio? dio, String? accessToken})
       : _dio = dio ??
             Dio(BaseOptions(
               baseUrl: _apiBaseUrl,
@@ -19,6 +20,7 @@ class ApiService {
               headers: {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
+                if (accessToken != null) 'Authorization': 'Bearer $accessToken',
               },
             ));
 
@@ -113,6 +115,15 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getCurrentUser() async {
+    try {
+      final response = await _dio.get('/auth/me');
+      return Map<String, dynamic>.from(response.data);
+    } on DioException catch (e) {
+      throw _handleError(e);
+    }
+  }
+
   // Google Calendar Integration
 
   /// Get Google Calendar connection status for a user
@@ -126,11 +137,11 @@ class ApiService {
   }
 
   /// Get the Google OAuth authorization URL
-  Future<String> getGoogleAuthUrl(int userId, String redirectUri) async {
+  Future<String> getGoogleAuthUrl(int userId, String returnUrl) async {
     try {
       final response = await _dio.get('/auth/google/authorize', queryParameters: {
         'user_id': userId,
-        'redirect_uri': redirectUri,
+        'return_url': returnUrl,
       });
       return response.data['authorization_url'];
     } on DioException catch (e) {

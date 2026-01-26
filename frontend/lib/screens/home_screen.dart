@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../providers/goals_provider.dart';
+import '../providers/auth_provider.dart';
 import '../models/goal.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -10,6 +11,50 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authStateProvider);
+    if (!authState.isAuthenticated) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('GoalCraft'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () => context.push('/settings'),
+            ),
+          ],
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_outline, size: 64),
+                const SizedBox(height: 16),
+                Text(
+                  'Log in to see your goals',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'We use Auth0 to keep your data separate from other users.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () => context.push('/login'),
+                  icon: const Icon(Icons.login),
+                  label: const Text('Log in'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final goalsAsync = ref.watch(goalsProvider);
 
     return Scaffold(

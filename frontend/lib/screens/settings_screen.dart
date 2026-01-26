@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/goals_provider.dart';
+import '../providers/auth_provider.dart';
 
 // User settings state
 class UserSettings {
@@ -56,11 +57,15 @@ class UserSettingsNotifier extends StateNotifier<UserSettings> {
   Future<void> _loadSettings() async {
     state = state.copyWith(isLoading: true);
     try {
+      final authState = _ref.read(authStateProvider);
+      if (!authState.isAuthenticated) {
+        state = const UserSettings(isLoading: false);
+        return;
+      }
       final apiService = _ref.read(apiServiceProvider);
-      // For now, use a hardcoded user ID (in production, get from auth)
-      const userId = 1;
+      final user = await apiService.getCurrentUser();
+      final userId = user['id'] as int;
 
-      // Check Google Calendar connection status
       bool isConnected = false;
       try {
         isConnected = await apiService.getGoogleCalendarStatus(userId);
@@ -70,13 +75,18 @@ class UserSettingsNotifier extends StateNotifier<UserSettings> {
 
       state = state.copyWith(
         userId: userId,
-        email: 'dev@goalcraft.local',
+        email: user['email'] as String?,
+        phoneNumber: user['phone_number'] as String?,
         isGoogleCalendarConnected: isConnected,
         isLoading: false,
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  Future<void> refresh() async {
+    await _loadSettings();
   }
 
   Future<void> refreshGoogleCalendarStatus() async {
@@ -121,14 +131,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isEditingPhone = false;
 
   @override
+  void initState() {
+    super.initState();
+    _handleGoogleOAuthReturn();
+  }
+
+  @override
   void dispose() {
     _phoneController.dispose();
     super.dispose();
   }
 
+  void _handleGoogleOAuthReturn() {
+    final params = Uri.base.queryParameters;
+    final status = params['google'];
+    if (status == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(userSettingsProvider.notifier).refreshGoogleCalendarStatus();
+      if (!mounted) return;
+
+      final message = status == 'connected'
+          ? 'Google Calendar connected.'
+          : params['message'] ?? 'Google Calendar connection failed.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      if (!mounted) return;
+      context.go('/settings');
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(userSettingsProvider);
+    final authState = ref.watch(authStateProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -143,6 +180,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                _buildSectionHeader('Account'),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.lock_outline),
+                    title: Text(
+                      authState.isAuthenticated
+                          ? 'Logged in'
+                          : 'Not logged in',
+                    ),
+                    subtitle: authState.credentials?.user.email != null
+                        ? Text(authState.credentials!.user.email!)
+                        : null,
+                    trailing: TextButton(
+                      onPressed: authState.isLoading
+                          ? null
+                          : () async {
+                              if (authState.isAuthenticated) {
+                                await ref.read(authStateProvider.notifier).logout();
+                              } else {
+                                await ref.read(authStateProvider.notifier).login();
+                              }
+                              await ref.read(userSettingsProvider.notifier).refresh();
+                            },
+                      child: Text(authState.isAuthenticated ? 'Log out' : 'Log in'),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
                 // Profile Section
                 _buildSectionHeader('Profile'),
                 Card(
@@ -427,19 +494,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settings = ref.read(userSettingsProvider);
     final apiService = ref.read(apiServiceProvider);
 
-    // The redirect URI for the OAuth flow
-    // Detect if running locally or in production
-    final currentUri = Uri.base;
-    final isLocal = currentUri.host == 'localhost' || currentUri.host == '127.0.0.1';
-    final redirectUri = isLocal
-        ? 'http://localhost:3001/auth/google/callback'
-        : 'https://harrolee.github.io/goalcraft/auth/google/callback';
+    final returnUrl = '${Uri.base.origin}/settings';
 
     try {
       // Get the authorization URL from the backend
       final authUrl = await apiService.getGoogleAuthUrl(
         settings.userId!,
-        redirectUri,
+        returnUrl,
       );
 
       // Launch the URL in a new browser tab

@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
+    # Auth0
+    AUTH0_DOMAIN: str = ""
+    AUTH0_AUDIENCE: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

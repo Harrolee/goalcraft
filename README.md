@@ -88,6 +88,10 @@ flutter run -d chrome
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `API_BASE_URL` | Backend API URL | Yes |
+| `AUTH0_DOMAIN` | Auth0 tenant domain | Yes (Auth) |
+| `AUTH0_CLIENT_ID` | Auth0 client ID | Yes (Auth) |
+| `AUTH0_AUDIENCE` | Auth0 API audience | Yes (Auth) |
+| `AUTH0_REDIRECT_URI` | Auth0 redirect URI | Optional |
 
 ## Deployment
 

@@ -6,6 +6,7 @@ import '../screens/new_goal_screen.dart';
 import '../screens/goal_detail_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/login_screen.dart';
 
 final GoRouter router = GoRouter(
   initialLocation: '/',
@@ -24,6 +25,11 @@ final GoRouter router = GoRouter(
       path: '/settings',
       name: 'settings',
       builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: '/login',
+      name: 'login',
+      builder: (context, state) => const LoginScreen(),
     ),
     GoRoute(
       path: '/goals/:id',

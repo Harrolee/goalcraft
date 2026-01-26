@@ -15,6 +15,10 @@
 #
 # Environment Variables:
 #   API_BASE_URL - Backend API URL (optional, defaults to production URL)
+#   AUTH0_DOMAIN - Auth0 domain (optional)
+#   AUTH0_CLIENT_ID - Auth0 client ID (optional)
+#   AUTH0_AUDIENCE - Auth0 API audience (optional)
+#   AUTH0_REDIRECT_URI - Auth0 redirect URI (optional)
 #
 
 set -euo pipefail
@@ -33,6 +37,14 @@ echo "=================================="
 
 # Navigate to frontend directory
 cd "$SCRIPT_DIR"
+
+# Load local env overrides if present
+if [ -f ".env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source ".env"
+    set +a
+fi
 
 # Check if Flutter is installed
 if ! command -v flutter &> /dev/null; then
@@ -56,14 +68,36 @@ flutter pub get
 # Build for web
 echo -e "\n${YELLOW}Building for web (release mode)...${NC}"
 
-# Set API_BASE_URL if provided
+BUILD_ARGS=()
+
 if [ -n "${API_BASE_URL:-}" ]; then
     echo "Using API_BASE_URL: $API_BASE_URL"
-    flutter build web --release --dart-define=API_BASE_URL="$API_BASE_URL"
+    BUILD_ARGS+=("--dart-define=API_BASE_URL=$API_BASE_URL")
 else
     echo "Using default API_BASE_URL from configuration"
-    flutter build web --release
 fi
+
+if [ -n "${AUTH0_DOMAIN:-}" ]; then
+    echo "Using AUTH0_DOMAIN: $AUTH0_DOMAIN"
+    BUILD_ARGS+=("--dart-define=AUTH0_DOMAIN=$AUTH0_DOMAIN")
+fi
+
+if [ -n "${AUTH0_CLIENT_ID:-}" ]; then
+    echo "Using AUTH0_CLIENT_ID: [set]"
+    BUILD_ARGS+=("--dart-define=AUTH0_CLIENT_ID=$AUTH0_CLIENT_ID")
+fi
+
+if [ -n "${AUTH0_AUDIENCE:-}" ]; then
+    echo "Using AUTH0_AUDIENCE: $AUTH0_AUDIENCE"
+    BUILD_ARGS+=("--dart-define=AUTH0_AUDIENCE=$AUTH0_AUDIENCE")
+fi
+
+if [ -n "${AUTH0_REDIRECT_URI:-}" ]; then
+    echo "Using AUTH0_REDIRECT_URI: $AUTH0_REDIRECT_URI"
+    BUILD_ARGS+=("--dart-define=AUTH0_REDIRECT_URI=$AUTH0_REDIRECT_URI")
+fi
+
+flutter build web --release "${BUILD_ARGS[@]}"
 
 # Verify build output
 if [ -d "build/web" ]; then

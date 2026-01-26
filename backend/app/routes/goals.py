@@ -10,6 +10,8 @@ from app.models.database import get_db
 from app.models.schemas import Goal, Milestone, User, MilestoneStatus
 from app.services.claude_service import ClaudeService
 from app.services.calendar_service import CalendarService
+from app.services.auth0 import get_current_user
+from app.services.checkin_scheduler import schedule_checkin_for_milestone
 
 
 router = APIRouter(prefix="/goals", tags=["goals"])
@@ -55,34 +57,18 @@ class GoalWithMilestones(GoalResponse):
     milestones: List[MilestoneResponse] = []
 
 
-async def get_or_create_default_user(db: AsyncSession) -> User:
-    """Get or create a default user for development."""
-    result = await db.execute(select(User).where(User.email == "dev@goalcraft.local"))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        user = User(email="dev@goalcraft.local", phone_number="+1234567890")
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-
-    return user
-
-
 @router.post("", response_model=GoalWithMilestones, status_code=status.HTTP_201_CREATED)
 async def create_goal(
     goal_data: GoalCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> GoalWithMilestones:
     """
     Create a new goal and generate milestones using Claude.
     """
-    # Get or create default user (in production, this would be the authenticated user)
-    user = await get_or_create_default_user(db)
-
     # Create the goal
     goal = Goal(
-        user_id=user.id,
+        user_id=current_user.id,
         title=goal_data.title,
         description=goal_data.description,
         target_date=goal_data.target_date
@@ -114,22 +100,22 @@ async def create_goal(
 
         await db.commit()
 
+        # Reload milestones to get their IDs for calendar + check-ins
+        result = await db.execute(
+            select(Milestone).where(Milestone.goal_id == goal.id).order_by(Milestone.order)
+        )
+        created_milestones = result.scalars().all()
+
         # Create calendar events if user has Google Calendar connected
-        if user.google_refresh_token and user.google_calendar_id:
+        if current_user.google_refresh_token and current_user.google_calendar_id:
             try:
                 calendar_service = CalendarService()
-
-                # Reload milestones to get their IDs
-                result = await db.execute(
-                    select(Milestone).where(Milestone.goal_id == goal.id).order_by(Milestone.order)
-                )
-                created_milestones = result.scalars().all()
 
                 for milestone in created_milestones:
                     if milestone.due_date:
                         event = await calendar_service.create_milestone_event(
-                            refresh_token=user.google_refresh_token,
-                            calendar_id=user.google_calendar_id,
+                            refresh_token=current_user.google_refresh_token,
+                            calendar_id=current_user.google_calendar_id,
                             title=milestone.title,
                             description=milestone.description or "",
                             due_date=milestone.due_date,
@@ -140,6 +126,11 @@ async def create_goal(
                 await db.commit()
             except Exception as cal_error:
                 print(f"Error creating calendar events: {cal_error}")
+
+        # Schedule check-ins one day before each milestone
+        for milestone in created_milestones:
+            await schedule_checkin_for_milestone(db, milestone)
+        await db.commit()
 
     except Exception as e:
         # Log error but don't fail the goal creation
@@ -177,16 +168,15 @@ async def create_goal(
 
 @router.get("", response_model=List[GoalResponse])
 async def list_goals(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[GoalResponse]:
     """
     List all goals for the current user.
     """
-    user = await get_or_create_default_user(db)
-
     result = await db.execute(
         select(Goal)
-        .where(Goal.user_id == user.id)
+        .where(Goal.user_id == current_user.id)
         .order_by(Goal.created_at.desc())
     )
     goals = result.scalars().all()
@@ -207,7 +197,8 @@ async def list_goals(
 @router.get("/{goal_id}", response_model=GoalWithMilestones)
 async def get_goal(
     goal_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> GoalWithMilestones:
     """
     Get a specific goal with its milestones.
@@ -215,7 +206,7 @@ async def get_goal(
     result = await db.execute(
         select(Goal)
         .options(selectinload(Goal.milestones))
-        .where(Goal.id == goal_id)
+        .where(Goal.id == goal_id, Goal.user_id == current_user.id)
     )
     goal = result.scalar_one_or_none()
 
@@ -250,12 +241,15 @@ async def get_goal(
 @router.delete("/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_goal(
     goal_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> None:
     """
     Delete a goal and all its milestones.
     """
-    result = await db.execute(select(Goal).where(Goal.id == goal_id))
+    result = await db.execute(
+        select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user.id)
+    )
     goal = result.scalar_one_or_none()
 
     if not goal:
@@ -271,7 +265,8 @@ async def delete_goal(
 @router.post("/{goal_id}/sync-calendar")
 async def sync_goal_to_calendar(
     goal_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> dict:
     """
     Sync all milestones for a goal to Google Calendar.
@@ -280,7 +275,7 @@ async def sync_goal_to_calendar(
     result = await db.execute(
         select(Goal)
         .options(selectinload(Goal.milestones), selectinload(Goal.user))
-        .where(Goal.id == goal_id)
+        .where(Goal.id == goal_id, Goal.user_id == current_user.id)
     )
     goal = result.scalar_one_or_none()
 

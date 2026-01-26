@@ -8,11 +8,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
-from app.routes import goals_router, milestones_router, auth_router
+from app.routes import goals_router, milestones_router, auth_router, checkins_router, vapi_webhook_router
 from app.models.database import AsyncSessionLocal
 from app.models.schemas import Goal, Milestone, MilestoneStatus, ChatMessage, ChatRole, User
 from app.services.claude_service import ClaudeService, ToolResult
 from app.services.calendar_service import CalendarService
+from app.services.checkin_scheduler import schedule_checkin_for_milestone
 
 
 @asynccontextmanager
@@ -44,6 +45,8 @@ app.add_middleware(
 app.include_router(goals_router, prefix="/api")
 app.include_router(milestones_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(checkins_router, prefix="/api")
+app.include_router(vapi_webhook_router, prefix="/api")
 
 
 @app.get("/health")
@@ -145,6 +148,9 @@ def create_tool_executor(
                         except Exception as cal_error:
                             print(f"Error creating calendar event: {cal_error}")
 
+                    await schedule_checkin_for_milestone(db, new_milestone)
+                    await db.commit()
+
                     return ToolResult(
                         tool_use_id="",
                         content=f"Added milestone '{new_milestone.title}' with ID {new_milestone.id}{calendar_msg}"
@@ -204,6 +210,9 @@ def create_tool_executor(
                             calendar_msg = " (calendar updated)"
                         except Exception as cal_error:
                             print(f"Error updating calendar event: {cal_error}")
+
+                    await schedule_checkin_for_milestone(db, milestone)
+                    await db.commit()
 
                     return ToolResult(
                         tool_use_id="",

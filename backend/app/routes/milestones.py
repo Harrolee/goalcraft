@@ -6,7 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.database import get_db
-from app.models.schemas import Milestone, Goal, MilestoneStatus
+from app.models.schemas import Milestone, Goal, MilestoneStatus, User
+from app.services.auth0 import get_current_user
+from app.services.checkin_scheduler import schedule_checkin_for_milestone
 
 
 router = APIRouter(tags=["milestones"])
@@ -40,13 +42,16 @@ class MilestoneUpdate(BaseModel):
 @router.get("/goals/{goal_id}/milestones", response_model=List[MilestoneResponse])
 async def list_milestones(
     goal_id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> List[MilestoneResponse]:
     """
     List all milestones for a specific goal.
     """
     # Check if goal exists
-    goal_result = await db.execute(select(Goal).where(Goal.id == goal_id))
+    goal_result = await db.execute(
+        select(Goal).where(Goal.id == goal_id, Goal.user_id == current_user.id)
+    )
     goal = goal_result.scalar_one_or_none()
 
     if not goal:
@@ -82,12 +87,17 @@ async def list_milestones(
 async def update_milestone(
     milestone_id: int,
     updates: MilestoneUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> MilestoneResponse:
     """
     Update a milestone's status or other fields.
     """
-    result = await db.execute(select(Milestone).where(Milestone.id == milestone_id))
+    result = await db.execute(
+        select(Milestone)
+        .join(Milestone.goal)
+        .where(Milestone.id == milestone_id, Goal.user_id == current_user.id)
+    )
     milestone = result.scalar_one_or_none()
 
     if not milestone:
@@ -108,6 +118,8 @@ async def update_milestone(
     if updates.order is not None:
         milestone.order = updates.order
 
+    await db.commit()
+    await schedule_checkin_for_milestone(db, milestone)
     await db.commit()
     await db.refresh(milestone)
 

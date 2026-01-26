@@ -2,10 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/goal.dart';
 import '../models/milestone.dart';
 import '../services/api_service.dart';
+import 'auth_provider.dart';
 
 // API Service provider
 final apiServiceProvider = Provider<ApiService>((ref) {
-  return ApiService();
+  final authState = ref.watch(authStateProvider);
+  return ApiService(accessToken: authState.credentials?.accessToken);
 });
 
 // Goals list provider
