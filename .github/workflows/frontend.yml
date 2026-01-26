@@ -7,6 +7,10 @@
 #
 # Required GitHub Secrets:
 #   API_BASE_URL - Backend API URL (e.g., https://goalcraft-backend-xxxxx.run.app)
+#   AUTH0_DOMAIN - Auth0 tenant domain
+#   AUTH0_CLIENT_ID - Auth0 client ID
+#   AUTH0_AUDIENCE - Auth0 API audience
+#   AUTH0_REDIRECT_URI - Auth0 redirect URI (optional)
 #
 # Setup Instructions:
 # 1. Enable GitHub Pages in repo settings (Settings -> Pages -> Source: GitHub Actions)
@@ -72,7 +76,11 @@ jobs:
         run: |
           flutter build web --release \
             --base-href "/goalcraft/" \
-            --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }}
+            --dart-define=API_BASE_URL=${{ secrets.API_BASE_URL }} \
+            --dart-define=AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }} \
+            --dart-define=AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID }} \
+            --dart-define=AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }} \
+            --dart-define=AUTH0_REDIRECT_URI=${{ secrets.AUTH0_REDIRECT_URI }}
         env:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
 
