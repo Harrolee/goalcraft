@@ -1,4 +1,5 @@
 import 'package:auth0_flutter/auth0_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AuthState {
@@ -46,8 +47,17 @@ class AuthService {
 
   Future<Credentials?> getStoredCredentials() async {
     _ensureConfigured();
-    if (await _auth0.credentialsManager.hasValidCredentials()) {
-      return _auth0.credentialsManager.credentials();
+    // Credentials manager is only supported on mobile platforms
+    if (kIsWeb) {
+      return null;
+    }
+    try {
+      if (await _auth0.credentialsManager.hasValidCredentials()) {
+        return _auth0.credentialsManager.credentials();
+      }
+    } catch (e) {
+      // Credentials manager not available on this platform
+      return null;
     }
     return null;
   }
@@ -69,11 +79,27 @@ class AuthService {
   }
 
   Future<void> storeCredentials(Credentials credentials) async {
-    await _auth0.credentialsManager.storeCredentials(credentials);
+    // Credentials manager is only supported on mobile platforms
+    if (kIsWeb) {
+      return;
+    }
+    try {
+      await _auth0.credentialsManager.storeCredentials(credentials);
+    } catch (e) {
+      // Credentials manager not available on this platform
+    }
   }
 
   Future<void> clearCredentials() async {
-    await _auth0.credentialsManager.clearCredentials();
+    // Credentials manager is only supported on mobile platforms
+    if (kIsWeb) {
+      return;
+    }
+    try {
+      await _auth0.credentialsManager.clearCredentials();
+    } catch (e) {
+      // Credentials manager not available on this platform
+    }
   }
 }
 
