@@ -59,7 +59,7 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     settings = get_settings()
-    if not settings.AUTH0_DOMAIN or not settings.AUTH0_AUDIENCE:
+    if not settings.AUTH0_DOMAIN:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Auth0 is not configured on the server.",
@@ -84,13 +84,18 @@ async def get_current_user(
         )
 
     try:
-        payload = jwt.decode(
-            token,
-            rsa_key,
-            algorithms=["RS256"],
-            audience=settings.AUTH0_AUDIENCE,
-            issuer=f"https://{settings.AUTH0_DOMAIN}/",
-        )
+        decode_options = {
+            "algorithms": ["RS256"],
+            "issuer": f"https://{settings.AUTH0_DOMAIN}/",
+        }
+        # Only validate audience if it's configured
+        if settings.AUTH0_AUDIENCE:
+            decode_options["audience"] = settings.AUTH0_AUDIENCE
+        else:
+            # Skip audience validation for SPAs without API configuration
+            decode_options["options"] = {"verify_aud": False}
+
+        payload = jwt.decode(token, rsa_key, **decode_options)
     except JWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
