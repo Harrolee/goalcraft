@@ -1,4 +1,5 @@
 import 'package:auth0_flutter/auth0_flutter.dart';
+import 'package:auth0_flutter/auth0_flutter_web.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,7 +35,23 @@ class AuthService {
   static const _auth0Audience = String.fromEnvironment('AUTH0_AUDIENCE');
   static const _auth0RedirectUri = String.fromEnvironment('AUTH0_REDIRECT_URI');
 
-  Auth0 get _auth0 => Auth0(_auth0Domain, _auth0ClientId);
+  Auth0? _auth0Mobile;
+  Auth0Web? _auth0Web;
+
+  Auth0 get _auth0 {
+    _auth0Mobile ??= Auth0(_auth0Domain, _auth0ClientId);
+    return _auth0Mobile!;
+  }
+
+  Auth0Web get _auth0WebInstance {
+    _auth0Web ??= Auth0Web(
+      _auth0Domain,
+      _auth0ClientId,
+      redirectUrl: redirectUri,
+      cacheLocation: CacheLocation.localStorage,
+    );
+    return _auth0Web!;
+  }
 
   String get redirectUri =>
       _auth0RedirectUri.isNotEmpty ? _auth0RedirectUri : Uri.base.origin;
@@ -47,42 +64,75 @@ class AuthService {
 
   Future<Credentials?> getStoredCredentials() async {
     _ensureConfigured();
-    // Credentials manager is only supported on mobile platforms
+
     if (kIsWeb) {
-      return null;
-    }
-    try {
-      if (await _auth0.credentialsManager.hasValidCredentials()) {
-        return _auth0.credentialsManager.credentials();
+      // On web, use Auth0Web onLoad to check for existing session
+      try {
+        return await _auth0WebInstance.onLoad(
+          audience: _auth0Audience.isNotEmpty ? _auth0Audience : null,
+          scopes: {'openid', 'profile', 'email'},
+          useRefreshTokens: true,
+        );
+      } catch (e) {
+        // No existing session
+        return null;
       }
-    } catch (e) {
-      // Credentials manager not available on this platform
+    } else {
+      // On mobile, use credentials manager
+      try {
+        if (await _auth0.credentialsManager.hasValidCredentials()) {
+          return _auth0.credentialsManager.credentials();
+        }
+      } catch (e) {
+        return null;
+      }
       return null;
     }
-    return null;
   }
 
   Future<Credentials> login() async {
     _ensureConfigured();
-    return _auth0.webAuthentication().login(
-          audience: _auth0Audience.isNotEmpty ? _auth0Audience : null,
-          scopes: {'openid', 'profile', 'email'},
-          redirectUrl: redirectUri,
-        );
+
+    if (kIsWeb) {
+      // On web, use popup login (works better for SPAs)
+      return _auth0WebInstance.loginWithPopup(
+        audience: _auth0Audience.isNotEmpty ? _auth0Audience : null,
+        scopes: {'openid', 'profile', 'email'},
+      );
+    } else {
+      // On mobile, use web authentication
+      return _auth0.webAuthentication().login(
+        audience: _auth0Audience.isNotEmpty ? _auth0Audience : null,
+        scopes: {'openid', 'profile', 'email'},
+        redirectUrl: redirectUri,
+      );
+    }
   }
 
   Future<void> logout() async {
     _ensureConfigured();
-    await _auth0.webAuthentication().logout(
-          returnTo: redirectUri,
-        );
+
+    if (kIsWeb) {
+      // On web, use Auth0Web logout
+      await _auth0WebInstance.logout(
+        returnToUrl: redirectUri,
+      );
+    } else {
+      // On mobile, use web authentication logout
+      await _auth0.webAuthentication().logout(
+        returnTo: redirectUri,
+      );
+      await clearCredentials();
+    }
   }
 
   Future<void> storeCredentials(Credentials credentials) async {
-    // Credentials manager is only supported on mobile platforms
+    // On web, credentials are automatically stored by Auth0Web
     if (kIsWeb) {
       return;
     }
+
+    // On mobile, use credentials manager
     try {
       await _auth0.credentialsManager.storeCredentials(credentials);
     } catch (e) {
@@ -91,10 +141,12 @@ class AuthService {
   }
 
   Future<void> clearCredentials() async {
-    // Credentials manager is only supported on mobile platforms
+    // On web, credentials are cleared by logout
     if (kIsWeb) {
       return;
     }
+
+    // On mobile, use credentials manager
     try {
       await _auth0.credentialsManager.clearCredentials();
     } catch (e) {
