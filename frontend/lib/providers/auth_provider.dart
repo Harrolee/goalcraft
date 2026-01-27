@@ -47,7 +47,7 @@ class AuthService {
   Future<Credentials?> getStoredCredentials() async {
     _ensureConfigured();
     if (await _auth0.credentialsManager.hasValidCredentials()) {
-      return _auth0.credentialsManager.getCredentials();
+      return _auth0.credentialsManager.credentials();
     }
     return null;
   }
@@ -57,7 +57,7 @@ class AuthService {
     return _auth0.webAuthentication().login(
           audience: _auth0Audience.isNotEmpty ? _auth0Audience : null,
           scopes: {'openid', 'profile', 'email'},
-          redirectUri: redirectUri,
+          redirectUrl: redirectUri,
         );
   }
 
