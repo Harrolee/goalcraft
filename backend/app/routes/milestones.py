@@ -133,3 +133,62 @@ async def update_milestone(
         order=milestone.order,
         created_at=milestone.created_at
     )
+
+
+@router.patch("/goals/{goal_id}/milestones/{milestone_id}", response_model=MilestoneResponse)
+async def update_milestone_nested(
+    goal_id: int,
+    milestone_id: int,
+    updates: MilestoneUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MilestoneResponse:
+    """
+    Update a milestone's status or other fields (nested route).
+    This is an alias for the /milestones/{milestone_id} endpoint.
+    """
+    # Verify goal ownership and milestone belongs to goal
+    result = await db.execute(
+        select(Milestone)
+        .join(Milestone.goal)
+        .where(
+            Milestone.id == milestone_id,
+            Milestone.goal_id == goal_id,
+            Goal.user_id == current_user.id
+        )
+    )
+    milestone = result.scalar_one_or_none()
+
+    if not milestone:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Milestone with id {milestone_id} not found in goal {goal_id}"
+        )
+
+    # Apply updates
+    if updates.title is not None:
+        milestone.title = updates.title
+    if updates.description is not None:
+        milestone.description = updates.description
+    if updates.due_date is not None:
+        milestone.due_date = updates.due_date
+    if updates.status is not None:
+        milestone.status = updates.status
+    if updates.order is not None:
+        milestone.order = updates.order
+
+    await db.commit()
+    await schedule_checkin_for_milestone(db, milestone)
+    await db.commit()
+    await db.refresh(milestone)
+
+    return MilestoneResponse(
+        id=milestone.id,
+        goal_id=milestone.goal_id,
+        title=milestone.title,
+        description=milestone.description,
+        due_date=milestone.due_date,
+        status=milestone.status.value,
+        order=milestone.order,
+        created_at=milestone.created_at
+    )
