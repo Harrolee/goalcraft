@@ -50,6 +50,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.btyt.screentest
+        TARGETED_DEVICE_FAMILY: "1"   # iPhone only (portrait app; avoids iPad multitasking rules)
+        DEVELOPMENT_TEAM: C38Q2GVQ5A  # LEE HARRISON HARROLD — persists across xcodegen regen
+        CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
