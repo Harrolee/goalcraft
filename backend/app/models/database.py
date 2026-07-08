@@ -91,6 +91,23 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Initialize database tables."""
+    """Initialize database tables and apply lightweight, idempotent migrations.
+
+    `create_all` creates any missing tables (e.g. metrics, metric_entries) but does
+    NOT add columns to tables that already exist. The ADD COLUMN IF NOT EXISTS
+    statements below bring an older deployed schema up to date on boot without a
+    separate migration tool. All statements are safe to run repeatedly.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        migrations = [
+            "ALTER TABLE goals ADD COLUMN IF NOT EXISTS identity TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS auth0_id VARCHAR(255)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_auth0_id ON users (auth0_id)",
+        ]
+        for statement in migrations:
+            try:
+                await conn.exec_driver_sql(statement)
+            except Exception as exc:  # never block startup on a best-effort migration
+                print(f"init_db migration skipped ({statement}): {exc}")
