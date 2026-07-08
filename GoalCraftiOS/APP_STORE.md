@@ -6,7 +6,7 @@ Developer account, signing, review) are Apple's process, not code.
 ## App identity
 - **Name:** Screen Test
 - **Subtitle (≤30):** Your portrait, in progress
-- **Bundle ID:** `com.goalcraft.ios` (internal; not user-visible)
+- **Bundle ID:** `com.btyt.screentest` (matches the App Store Connect record; internal, not user-visible)
 - **Version / Build:** 1.0 (1)
 - **Primary category:** Productivity  ·  **Secondary:** Lifestyle
 - **Age rating:** 4+

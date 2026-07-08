@@ -1,6 +1,6 @@
 name: GoalCraftiOS
 options:
-  bundleIdPrefix: com.goalcraft
+  bundleIdPrefix: com.btyt
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -47,7 +47,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.goalcraft.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.btyt.screentest
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
