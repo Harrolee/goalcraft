@@ -17,8 +17,9 @@
 #               App Store Connect API -> Issuer ID (a UUID)
 set -euo pipefail
 
-: "${TEAM_ID:?Set TEAM_ID (10-char Apple Developer Team ID)}"
-: "${ISSUER_ID:?Set ISSUER_ID (App Store Connect API Issuer ID)}"
+# Team that owns com.btyt.screentest — "LEE HARRISON HARROLD". Override with TEAM_ID=... if needed.
+TEAM_ID="${TEAM_ID:-C38Q2GVQ5A}"
+: "${ISSUER_ID:?Set ISSUER_ID (App Store Connect API Issuer ID, a UUID)}"
 
 KEY_ID="3S6925Y2PL"
 KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8"
@@ -34,12 +35,15 @@ AUTH=(-allowProvisioningUpdates
 echo "==> Regenerating project"
 xcodegen generate
 
-echo "==> Archiving (Release, automatic signing)"
+echo "==> Archiving (Release, automatic signing via signed-in Xcode account)"
+# NOTE: no API-key flags here — those would force provisioning through the key's
+# account and ignore the Apple ID signed into Xcode. -allowProvisioningUpdates
+# uses the Xcode account to create the distribution cert + App Store profile.
 xcodebuild -project GoalCraftiOS.xcodeproj -scheme GoalCraftiOS \
   -configuration Release -sdk iphoneos -archivePath "$ARCHIVE" archive \
   DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic \
   CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES \
-  "${AUTH[@]}"
+  -allowProvisioningUpdates
 
 echo "==> Writing ExportOptions.plist"
 cat > build/ExportOptions.plist <<PLIST
