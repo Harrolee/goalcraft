@@ -16,7 +16,22 @@ from app.models.database import get_db
 from app.models.schemas import User
 
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+
+async def _get_or_create_dev_user(db: AsyncSession) -> User:
+    """Local-development user used when DEV_AUTH_BYPASS is enabled."""
+    settings = get_settings()
+    email = settings.DEV_USER_EMAIL
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+    user = User(email=email, auth0_id="dev|local")
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 @lru_cache(maxsize=1)
@@ -55,14 +70,25 @@ def _extract_email(payload: Dict[str, Any]) -> Optional[str]:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     settings = get_settings()
+
+    # Local development shortcut — never enabled in production.
+    if settings.DEV_AUTH_BYPASS:
+        return await _get_or_create_dev_user(db)
+
     if not settings.AUTH0_DOMAIN:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Auth0 is not configured on the server.",
+        )
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization header.",
         )
 
     token = credentials.credentials

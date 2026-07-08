@@ -7,14 +7,19 @@ AI-powered goal planning and accountability platform that helps users set, track
 ### Backend
 - **Framework**: FastAPI (Python 3.11+)
 - **Database**: PostgreSQL (Neon in production, local Postgres for development)
-- **AI**: OpenAI GPT-4 for goal coaching and planning
+- **AI**: Anthropic Claude for goal coaching and planning
 - **SMS**: Twilio for check-in notifications
 - **Deployment**: Google Cloud Run
 - **Scheduler**: Google Cloud Scheduler for periodic check-ins
 
 ### Frontend
 - **Framework**: Flutter Web
-- **Deployment**: Cloudflare Pages
+- **Deployment**: GitHub Pages — live at https://harrolee.github.io/goalcraft/
+
+### iOS App ("Screen Test")
+- **Framework**: Native SwiftUI (iOS 17+), a custom-metrics dashboard for identity-based goals
+- **Location**: `GoalCraftiOS/` (project generated from `project.yml` via XcodeGen)
+- See `GoalCraftiOS/APP_STORE.md` for submission metadata and status
 
 ### Infrastructure
 - **CI/CD**: GitHub Actions
@@ -75,7 +80,10 @@ flutter run -d chrome
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `DATABASE_URL` | PostgreSQL connection string (Neon in prod) | Yes |
-| `OPENAI_API_KEY` | OpenAI API key for AI coaching | Yes |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key for AI coaching | Yes |
+| `AUTH0_DOMAIN` | Auth0 tenant domain (API auth) | Yes (prod) |
+| `AUTH0_AUDIENCE` | Auth0 API audience | Optional |
+| `DEV_AUTH_BYPASS` | Local dev only: skip Auth0 and use a fixed dev user. **Must be false in production.** | No |
 | `TWILIO_ACCOUNT_SID` | Twilio account SID | Yes |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token | Yes |
 | `TWILIO_PHONE_NUMBER` | Twilio phone number for SMS | Yes |
@@ -127,21 +135,21 @@ gcloud builds submit --config=cloudbuild.yaml
 #### Automated Deployment
 Push to the `main` branch with changes in `backend/**` to trigger automatic deployment via GitHub Actions.
 
-### Frontend Deployment (Cloudflare Pages)
+### Frontend Deployment (GitHub Pages)
 
-#### Prerequisites
-1. Cloudflare account with Pages enabled
-2. Create a Cloudflare API token with Pages permissions
-
-#### Manual Deployment
-```bash
-cd frontend
-./build_web.sh
-npx wrangler pages deploy build/web --project-name=goalcraft
-```
+The Flutter web app deploys to **GitHub Pages** at https://harrolee.github.io/goalcraft/
+(served under the `/goalcraft/` base path).
 
 #### Automated Deployment
-Push to the `main` branch with changes in `frontend/**` to trigger automatic deployment via GitHub Actions.
+Push to the `main` branch with changes in `frontend/**` to trigger the
+`.github/workflows/frontend.yml` workflow, which builds Flutter web and publishes to
+GitHub Pages. It can also be run manually via **Actions → Deploy Frontend → Run workflow**.
+
+Static legal/support pages live in `frontend/web/{privacy,terms,about,support}/` and are
+published by the same build (available at `/goalcraft/privacy/`, etc.).
+
+> Note: an earlier revision of this README described Cloudflare Pages; the project now
+> deploys to GitHub Pages. `frontend/build_web.sh` still contains a legacy Cloudflare hint.
 
 ### Setting Up Cloud Scheduler
 
@@ -174,6 +182,18 @@ This creates an hourly job that triggers the check-in endpoint.
 - `PUT /milestones/{id}` - Update milestone
 - `DELETE /milestones/{id}` - Delete milestone
 
+### Metrics (custom, user-defined measurements per goal)
+- `GET /goals/{goal_id}/metrics` - List a goal's metrics (with entries and totals)
+- `POST /goals/{goal_id}/metrics` - Create a metric
+- `PUT /metrics/{id}` - Update a metric
+- `DELETE /metrics/{id}` - Delete a metric
+- `POST /metrics/{id}/entries` - Log an entry (increment)
+- `DELETE /metrics/{id}/entries/{entry_id}` - Delete an entry
+
+### Account
+- `GET /account/me` - Current user profile
+- `DELETE /account` - Permanently delete the account and all associated data (cascade)
+
 ### Chat (AI Coaching)
 - `POST /chat` - Send message to AI coach
 - `GET /chat/history` - Get chat history
@@ -186,8 +206,10 @@ This creates an hourly job that triggers the check-in endpoint.
 
 See `schema.sql` for the complete database schema. The main tables are:
 - `users` - User accounts and profiles
-- `goals` - User goals with AI-generated plans
+- `goals` - User goals (with identity framing) and AI-generated plans
 - `milestones` - Goal milestones and progress tracking
+- `metrics` - Custom, user-defined measurements attached to a goal
+- `metric_entries` - Individual logged entries that increment a metric
 - `chat_messages` - AI coaching conversation history
 - `check_ins` - Scheduled check-ins and responses
 

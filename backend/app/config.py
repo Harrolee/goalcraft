@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     AUTH0_DOMAIN: str = ""
     AUTH0_AUDIENCE: str = ""
 
+    # Local development only: bypass Auth0 and use a fixed dev user.
+    # MUST stay false in production.
+    DEV_AUTH_BYPASS: bool = False
+    DEV_USER_EMAIL: str = "dev@goalcraft.local"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

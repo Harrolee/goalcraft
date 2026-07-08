@@ -8,7 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 
-from app.routes import goals_router, milestones_router, auth_router, checkins_router, vapi_webhook_router
+from app.routes import (
+    goals_router, milestones_router, metrics_router, auth_router,
+    account_router, checkins_router, vapi_webhook_router,
+)
 from app.models.database import AsyncSessionLocal
 from app.models.schemas import Goal, Milestone, MilestoneStatus, ChatMessage, ChatRole, User
 from app.services.claude_service import ClaudeService, ToolResult
@@ -44,7 +47,9 @@ app.add_middleware(
 # Include routers with /api prefix
 app.include_router(goals_router, prefix="/api")
 app.include_router(milestones_router, prefix="/api")
+app.include_router(metrics_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(account_router, prefix="/api")
 app.include_router(checkins_router, prefix="/api")
 app.include_router(vapi_webhook_router, prefix="/api")
 

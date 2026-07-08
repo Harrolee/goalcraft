@@ -60,6 +60,8 @@ class Goal(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Identity-based framing: who the user is becoming (not an affirmation).
+    identity: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     target_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -69,6 +71,9 @@ class Goal(Base):
     user: Mapped["User"] = relationship("User", back_populates="goals")
     milestones: Mapped[List["Milestone"]] = relationship(
         "Milestone", back_populates="goal", cascade="all, delete-orphan", order_by="Milestone.order"
+    )
+    metrics: Mapped[List["Metric"]] = relationship(
+        "Metric", back_populates="goal", cascade="all, delete-orphan", order_by="Metric.order"
     )
     chat_messages: Mapped[List["ChatMessage"]] = relationship(
         "ChatMessage", back_populates="goal", cascade="all, delete-orphan", order_by="ChatMessage.created_at"
@@ -154,3 +159,58 @@ class CheckIn(Base):
 
     def __repr__(self) -> str:
         return f"<CheckIn(id={self.id}, milestone_id={self.milestone_id})>"
+
+
+class Metric(Base):
+    """Custom, user-defined measurement attached to a goal.
+
+    e.g. "Songs Released", "Cowriting Sessions Attended". Progress is the sum
+    of its MetricEntry rows — nothing about the count is hardcoded.
+    """
+    __tablename__ = "metrics"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    unit: Mapped[str] = mapped_column(String(64), default="", nullable=False)
+    symbol: Mapped[str] = mapped_column(String(64), default="chart.bar.fill", nullable=False)
+    color: Mapped[str] = mapped_column(String(9), default="#1E9068", nullable=False)
+    target: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    goal: Mapped["Goal"] = relationship("Goal", back_populates="metrics")
+    entries: Mapped[List["MetricEntry"]] = relationship(
+        "MetricEntry", back_populates="metric", cascade="all, delete-orphan",
+        order_by="MetricEntry.logged_at"
+    )
+
+    def __repr__(self) -> str:
+        return f"<Metric(id={self.id}, name={self.name})>"
+
+
+class MetricEntry(Base):
+    """A single logged event contributing to a metric (usually +1)."""
+    __tablename__ = "metric_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    metric_id: Mapped[int] = mapped_column(
+        ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    note: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    logged_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="entries")
+
+    def __repr__(self) -> str:
+        return f"<MetricEntry(id={self.id}, metric_id={self.metric_id}, amount={self.amount})>"

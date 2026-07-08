@@ -36,7 +36,9 @@ class GoalCreate(BaseModel):
     """Request model for creating a goal."""
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    identity: Optional[str] = None
     target_date: Optional[datetime] = None
+    generate_milestones: bool = True
 
 
 class GoalResponse(BaseModel):
@@ -45,6 +47,7 @@ class GoalResponse(BaseModel):
     user_id: int
     title: str
     description: Optional[str] = None
+    identity: Optional[str] = None
     target_date: Optional[datetime] = None
     created_at: datetime
 
@@ -71,6 +74,7 @@ async def create_goal(
         user_id=current_user.id,
         title=goal_data.title,
         description=goal_data.description,
+        identity=goal_data.identity,
         target_date=goal_data.target_date
     )
     db.add(goal)
@@ -84,7 +88,10 @@ async def create_goal(
         goal_description += f": {goal_data.description}"
 
     try:
-        milestone_data_list = await claude.plan_goal(goal_description, goal_data.target_date)
+        milestone_data_list = (
+            await claude.plan_goal(goal_description, goal_data.target_date)
+            if goal_data.generate_milestones else []
+        )
 
         # Create milestones in DB
         for md in milestone_data_list:
@@ -149,6 +156,7 @@ async def create_goal(
         user_id=goal.user_id,
         title=goal.title,
         description=goal.description,
+        identity=goal.identity,
         target_date=goal.target_date,
         created_at=goal.created_at,
         milestones=[
@@ -187,6 +195,7 @@ async def list_goals(
             user_id=g.user_id,
             title=g.title,
             description=g.description,
+            identity=g.identity,
             target_date=g.target_date,
             created_at=g.created_at
         )
@@ -221,6 +230,7 @@ async def get_goal(
         user_id=goal.user_id,
         title=goal.title,
         description=goal.description,
+        identity=goal.identity,
         target_date=goal.target_date,
         created_at=goal.created_at,
         milestones=[

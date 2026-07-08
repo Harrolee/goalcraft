@@ -32,6 +32,8 @@ services:
       - DATABASE_URL=postgresql://goalcraft:goalcraft_dev_password@postgres:5432/goalcraft
       # Environment
       - ENVIRONMENT=development
+      # Local-only: skip Auth0 and use a fixed dev user (NEVER set in production)
+      - DEV_AUTH_BYPASS=true
     volumes:
       # Mount source code for hot reload
       - ./backend/app:/app/app:ro
@@ -53,7 +55,9 @@ services:
     image: postgres:15-alpine
     container_name: goalcraft-postgres
     ports:
-      - "5432:5432"
+      # Host 5433 to avoid clashing with other local Postgres instances.
+      # The backend still reaches it over the internal network at postgres:5432.
+      - "5439:5432"
     environment:
       - POSTGRES_USER=goalcraft
       - POSTGRES_PASSWORD=goalcraft_dev_password

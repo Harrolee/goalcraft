@@ -1,0 +1,42 @@
+name: GoalCraftiOS
+options:
+  bundleIdPrefix: com.goalcraft
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_IDENTITY: ""
+targets:
+  GoalCraftiOS:
+    type: application
+    platform: iOS
+    sources:
+      - GoalCraftiOS
+    info:
+      path: GoalCraftiOS/Info.plist
+      properties:
+        CFBundleDisplayName: Screen Test
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          # Dev only: allow http to the local backend. Tighten before release.
+          NSAllowsLocalNetworking: true
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.goalcraft.ios
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

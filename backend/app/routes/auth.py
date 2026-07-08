@@ -53,9 +53,9 @@ async def get_me(
 
 @router.get("/google/authorize")
 async def google_authorize(
+    request: Request,
     user_id: int = Query(..., description="User ID to authorize"),
     return_url: str = Query(..., description="Frontend URL to return to after authorization"),
-    request: Request
 ) -> dict:
     """
     Get the Google OAuth authorization URL.
@@ -94,11 +94,11 @@ async def google_authorize(
 
 @router.get("/google/callback")
 async def google_callback(
+    request: Request,
     code: str = Query(..., description="Authorization code from Google"),
     state: str = Query(..., description="State parameter for verification"),
     user_id: Optional[int] = Query(None, description="User ID to save the token for"),
     redirect_uri: Optional[str] = Query(None, description="The same redirect URI used in authorize"),
-    request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> RedirectResponse:
     """
