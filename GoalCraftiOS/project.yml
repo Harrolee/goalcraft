@@ -30,6 +30,8 @@ targets:
       properties:
         CFBundleDisplayName: Screen Test
         ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Screen Test uses the microphone so you can describe your goals out loud.
+        NSSpeechRecognitionUsageDescription: Screen Test transcribes your description on-device to suggest metrics.
         NSAppTransportSecurity:
           # Dev only: allow http to the local backend. Tighten before release.
           NSAllowsLocalNetworking: true

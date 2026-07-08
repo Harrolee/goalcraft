@@ -104,6 +104,14 @@ struct APIClient {
 
     func deleteMetric(_ id: Int) async throws { try await requestVoid("metrics/\(id)", method: "DELETE") }
 
+    func suggestMetrics(goalId: Int, transcript: String) async throws -> [ProposedMetric] {
+        struct Body: Encodable { let transcript: String }
+        struct Resp: Decodable { let metrics: [ProposedMetric] }
+        let resp: Resp = try await request("goals/\(goalId)/suggest-metrics",
+                                           method: "POST", body: Body(transcript: transcript))
+        return resp.metrics
+    }
+
     func logEntry(metricId: Int, amount: Int, note: String) async throws -> Metric {
         try await request("metrics/\(metricId)/entries", method: "POST",
                           body: LogEntryBody(amount: amount, note: note))
@@ -131,6 +139,17 @@ private struct CreateMetricBody: Encodable {
     let color: String; let target: Int?; let order: Int
 }
 private struct LogEntryBody: Encodable { let amount: Int; let note: String }
+
+/// A Claude-proposed metric (from a voice description) awaiting user confirmation.
+struct ProposedMetric: Codable, Identifiable, Hashable {
+    var id = UUID()
+    var name: String
+    var unit: String = ""
+    var symbol: String = "chart.bar.fill"
+    var color: String = "#1E9068"
+    var target: Int?
+    enum CodingKeys: String, CodingKey { case name, unit, symbol, color, target }
+}
 
 struct EmptyResponse: Decodable {}
 

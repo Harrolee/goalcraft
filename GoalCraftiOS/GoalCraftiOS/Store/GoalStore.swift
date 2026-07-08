@@ -58,6 +58,12 @@ final class GoalStore: ObservableObject {
         }
     }
 
+    /// Ask the backend (Claude) to propose metrics from a spoken description.
+    func suggestMetrics(goalID: Int, transcript: String) async -> [ProposedMetric] {
+        do { return try await api.suggestMetrics(goalId: goalID, transcript: transcript) }
+        catch { errorMessage = friendly(error); return [] }
+    }
+
     func log(_ amount: Int = 1, note: String = "", to metricID: Int, in goalID: Int) async {
         do {
             let updated = try await api.logEntry(metricId: metricID, amount: amount, note: note)

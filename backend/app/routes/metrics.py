@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.models.database import get_db
 from app.models.schemas import Goal, Metric, MetricEntry, User
 from app.services.auth0 import get_current_user
+from app.services.claude_service import ClaudeService
 
 router = APIRouter(tags=["metrics"])
 
@@ -48,6 +49,22 @@ class MetricUpdate(BaseModel):
     color: Optional[str] = None
     target: Optional[int] = None
     order: Optional[int] = None
+
+
+class SuggestMetricsRequest(BaseModel):
+    transcript: str = Field(..., min_length=1, max_length=8000)
+
+
+class ProposedMetric(BaseModel):
+    name: str
+    unit: str = ""
+    symbol: str = "chart.bar.fill"
+    color: str = "#1E9068"
+    target: Optional[int] = None
+
+
+class SuggestMetricsResponse(BaseModel):
+    metrics: List[ProposedMetric] = []
 
 
 class MetricResponse(BaseModel):
@@ -123,6 +140,25 @@ async def list_metrics(
         .order_by(Metric.order, Metric.id)
     )
     return [_to_response(m) for m in result.scalars().all()]
+
+
+@router.post("/goals/{goal_id}/suggest-metrics", response_model=SuggestMetricsResponse)
+async def suggest_metrics(
+    goal_id: int,
+    data: SuggestMetricsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SuggestMetricsResponse:
+    """Given a spoken description, have Claude propose custom metrics.
+    Does not persist — the client confirms, then POSTs the ones it wants.
+    """
+    goal = await _owned_goal(goal_id, db, current_user)
+    try:
+        raw = await ClaudeService().suggest_metrics(
+            goal_title=goal.title, identity=goal.identity, transcript=data.transcript)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=f"Suggestion failed: {exc}")
+    return SuggestMetricsResponse(metrics=[ProposedMetric(**m) for m in raw])
 
 
 @router.post("/goals/{goal_id}/metrics", response_model=MetricResponse,

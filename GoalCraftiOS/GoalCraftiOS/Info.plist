@@ -36,6 +36,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Screen Test uses the microphone so you can describe your goals out loud.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Screen Test transcribes your description on-device to suggest metrics.</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

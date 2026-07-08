@@ -6,6 +6,7 @@ struct DashboardView: View {
     @State private var showAddMetric = false
     @State private var showAddGoal = false
     @State private var showSettings = false
+    @State private var showVoice = false
     @State private var detailMetric: Metric?
     @State private var appeared = false
 
@@ -55,6 +56,8 @@ struct DashboardView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button { showVoice = true } label: { Label("Describe by Voice", systemImage: "mic.fill") }
+                            .disabled(currentGoal == nil)
                         Button { showAddMetric = true } label: { Label("Add Metric", systemImage: "plus") }
                             .disabled(currentGoal == nil)
                         Button { showAddGoal = true } label: { Label("New Goal", systemImage: "target") }
@@ -74,6 +77,9 @@ struct DashboardView: View {
                 AddGoalView { newID in selectedGoalID = newID }.environmentObject(store)
             }
             .sheet(isPresented: $showSettings) { SettingsView().environmentObject(store) }
+            .sheet(isPresented: $showVoice) {
+                if let goal = currentGoal { VoiceMetricsView(goalID: goal.id).environmentObject(store) }
+            }
             .sheet(item: $detailMetric) { metric in
                 if let goal = currentGoal {
                     MetricDetailView(goalID: goal.id, metricID: metric.id).environmentObject(store)
@@ -130,6 +136,11 @@ struct DashboardView: View {
                 Text("THE LEDGER")
                     .font(BrandFont.signage(13)).tracking(3).foregroundStyle(Brand.gold)
                 Spacer()
+                Button { showVoice = true } label: {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.gold)
+                        .padding(.trailing, 4)
+                }
                 Button { showAddMetric = true } label: {
                     Text("＋ METRIC")
                         .font(BrandFont.signage(12)).tracking(1.5).foregroundStyle(Brand.granite)

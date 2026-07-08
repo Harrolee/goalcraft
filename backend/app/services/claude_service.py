@@ -178,7 +178,78 @@ class ClaudeService:
     def __init__(self):
         settings = get_settings()
         self.client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-sonnet-5"
+
+    async def suggest_metrics(
+        self,
+        goal_title: str,
+        identity: Optional[str],
+        transcript: str,
+    ) -> List[Dict[str, Any]]:
+        """Propose custom metrics for a goal from a spoken description.
+
+        Returns a list of dicts: name, unit, symbol (SF Symbol), color (hex),
+        target (int). Nothing is persisted here.
+        """
+        symbols = [
+            "sparkles", "pencil.and.scribble", "waveform", "person.2.fill",
+            "dollarsign.circle.fill", "music.note", "mic.fill", "star.fill",
+            "flame.fill", "book.fill", "paintbrush.fill", "figure.run",
+            "checkmark.seal.fill", "calendar", "chart.line.uptrend.xyaxis",
+        ]
+        colors = ["#1E9068", "#116B4E", "#3AA981", "#C9A55C", "#E9D19A", "#C6413B"]
+
+        tool = {
+            "name": "propose_metrics",
+            "description": "Propose the handful of trackable metrics that would prove someone is becoming the identity they described.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "metrics": {
+                        "type": "array",
+                        "description": "3–6 concrete, countable metrics",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Short metric name, e.g. 'Songs Released'"},
+                                "unit": {"type": "string", "description": "Unit label, e.g. 'songs' (may be empty)"},
+                                "symbol": {"type": "string", "enum": symbols, "description": "Best-fitting SF Symbol"},
+                                "color": {"type": "string", "enum": colors, "description": "Accent color hex"},
+                                "target": {"type": "integer", "description": "A meaningful target to chase (>=1)"},
+                            },
+                            "required": ["name", "unit", "symbol", "color", "target"],
+                        },
+                    }
+                },
+                "required": ["metrics"],
+            },
+        }
+
+        system_prompt = (
+            "You turn a person's spoken description of who they want to become into a small, "
+            "concrete set of COUNTABLE metrics — the evidence that would prove the identity is real. "
+            "Prefer things you tally over time (counts, sessions, releases). Avoid vague or mood-based "
+            "measures. Pick 3–6. Choose the closest SF Symbol and an accent color from the allowed lists."
+        )
+        user_prompt = (
+            f"Goal: {goal_title}\n"
+            f"Identity: {identity or 'not specified'}\n"
+            f"What they said:\n\"\"\"\n{transcript}\n\"\"\"\n\n"
+            "Use the propose_metrics tool."
+        )
+
+        response = await self.client.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            system=system_prompt,
+            tools=[tool],
+            tool_choice={"type": "tool", "name": "propose_metrics"},
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        for block in response.content:
+            if getattr(block, "type", None) == "tool_use" and block.name == "propose_metrics":
+                return block.input.get("metrics", [])
+        return []
 
     async def plan_goal(
         self,
