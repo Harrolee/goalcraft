@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Auth0 configuration for Auth0.swift (read automatically by WebAuth/Authentication).
+  Domain matches the backend's AUTH0_DOMAIN so issued id tokens validate.
+-->
+<plist version="1.0">
+<dict>
+  <key>ClientId</key>
+  <string>NR8LdWOqf49Ar5KRMw4IRhl286Aool1X</string>
+  <key>Domain</key>
+  <string>dev-51oh7hxkk74lvdzl.us.auth0.com</string>
+</dict>
+</plist>

@@ -1,5 +1,4 @@
 import SwiftUI
-import AuthenticationServices
 
 struct LoginView: View {
     @EnvironmentObject var auth: AuthManager
@@ -41,12 +40,25 @@ struct LoginView: View {
                     .fixedSize(horizontal: false, vertical: true).lineSpacing(2)
                     .padding(.bottom, 20)
 
-                SignInWithAppleButton(.signIn,
-                    onRequest: { $0.requestedScopes = [.fullName, .email] },
-                    onCompletion: { auth.handleAppleCompletion($0) })
-                    .signInWithAppleButtonStyle(.white)
-                    .frame(height: 52)
-                    .clipShape(RoundedRectangle(cornerRadius: Brand.corner))
+                Button {
+                    Task { await auth.loginWithApple() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if auth.isWorking { ProgressView().tint(.black) }
+                        else { Image(systemName: "applelogo").font(.system(size: 18, weight: .medium)) }
+                        Text("Sign in with Apple").font(.system(size: 19, weight: .medium))
+                    }
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(.white, in: RoundedRectangle(cornerRadius: Brand.corner))
+                }
+                .buttonStyle(.plain)
+                .disabled(auth.isWorking)
+
+                if let err = auth.errorMessage {
+                    Text(err).font(BrandFont.body(12)).foregroundStyle(Brand.flame)
+                        .padding(.top, 8)
+                }
 
                 #if DEBUG
                 Button {

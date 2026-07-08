@@ -1,45 +1,89 @@
 import Foundation
-import AuthenticationServices
+import Auth0
 
-/// Authentication state. Production uses Sign in with Apple (App Store requires
-/// it alongside any third-party login) plus the Auth0-backed API. In local dev
-/// the backend runs with DEV_AUTH_BYPASS, so `devEnter()` lets us proceed
-/// without a signed Apple entitlement.
+/// Holds the bearer token used on every API request. Updated by AuthManager
+/// after login/renewal; read synchronously by APIClient's tokenProvider.
+final class TokenStore: @unchecked Sendable {
+    static let shared = TokenStore()
+    private let lock = NSLock()
+    private var _bearer: String?
+    var bearer: String? {
+        get { lock.lock(); defer { lock.unlock() }; return _bearer }
+        set { lock.lock(); _bearer = newValue; lock.unlock() }
+    }
+    private init() {}
+}
+
+/// Authentication via Auth0 Universal Login (Auth0.swift). The tenant is
+/// configured in Auth0.plist and must match the backend's AUTH0_DOMAIN so the
+/// issued id token validates. Sign in with Apple is offered as an Auth0
+/// connection, satisfying both Auth0 and Apple's requirement in one flow.
 @MainActor
 final class AuthManager: ObservableObject {
     @Published var isAuthenticated = false
-    @Published var displayName: String?
+    @Published var isWorking = false
+    @Published var errorMessage: String?
 
-    private let userKey = "goalcraft.apple.userID"
+    private let credentialsManager = CredentialsManager(authentication: Auth0.authentication())
 
     init() {
-        // Restore a prior Apple sign-in if present.
-        if UserDefaults.standard.string(forKey: userKey) != nil {
+        Task { await restore() }
+    }
+
+    /// True once real values (not the YOUR_… placeholders) are in Auth0.plist.
+    static var isConfigured: Bool {
+        guard let url = Bundle.main.url(forResource: "Auth0", withExtension: "plist"),
+              let dict = NSDictionary(contentsOf: url),
+              let clientId = dict["ClientId"] as? String else { return false }
+        return !clientId.hasPrefix("YOUR_")
+    }
+
+    /// Restore a stored session on launch (silently renewing if needed).
+    func restore() async {
+        guard Self.isConfigured, credentialsManager.hasValid() || credentialsManager.canRenew() else { return }
+        do {
+            let creds = try await credentialsManager.credentials()
+            TokenStore.shared.bearer = creds.idToken
             isAuthenticated = true
+        } catch {
+            // Not signed in / renewal failed — remain on the login screen.
         }
     }
 
-    func handleAppleCompletion(_ result: Result<ASAuthorization, Error>) {
-        switch result {
-        case .success(let auth):
-            if let cred = auth.credential as? ASAuthorizationAppleIDCredential {
-                UserDefaults.standard.set(cred.user, forKey: userKey)
-                if let name = cred.fullName, let given = name.givenName {
-                    displayName = given
-                }
-                // TODO: exchange cred.identityToken with the backend for an
-                // Auth0 session once the Apple capability is provisioned.
-            }
+    /// Launch Universal Login straight into the Apple connection.
+    func loginWithApple() async { await login(connection: "apple") }
+
+    func login(connection: String? = nil) async {
+        guard Self.isConfigured else {
+            errorMessage = "Sign-in isn't configured yet."
+            return
+        }
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            var webAuth = Auth0.webAuth().scope("openid profile email offline_access")
+            if let connection { webAuth = webAuth.connection(connection) }
+            let creds = try await webAuth.start()
+            _ = credentialsManager.store(credentials: creds)
+            TokenStore.shared.bearer = creds.idToken
+            errorMessage = nil
             isAuthenticated = true
-        case .failure:
-            break
+        } catch {
+            errorMessage = "Sign-in didn't complete. Please try again."
         }
     }
-
-    func devEnter() { isAuthenticated = true }
 
     func signOut() {
-        UserDefaults.standard.removeObject(forKey: userKey)
-        isAuthenticated = false
+        Task {
+            if Self.isConfigured { _ = try? await Auth0.webAuth().clearSession() }
+            _ = credentialsManager.clear()
+            TokenStore.shared.bearer = nil
+            isAuthenticated = false
+        }
     }
+
+    #if DEBUG
+    /// Local-only shortcut: enter without Auth0 (pairs with the backend's DEV_AUTH_BYPASS).
+    func devEnter() { isAuthenticated = true }
+    #endif
 }

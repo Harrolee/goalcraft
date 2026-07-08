@@ -12,12 +12,19 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGNING_REQUIRED: "NO"
     CODE_SIGN_IDENTITY: ""
+packages:
+  Auth0:
+    url: https://github.com/auth0/Auth0.swift
+    from: 2.10.0
 targets:
   GoalCraftiOS:
     type: application
     platform: iOS
     sources:
       - GoalCraftiOS
+    dependencies:
+      - package: Auth0
+        product: Auth0
     info:
       path: GoalCraftiOS/Info.plist
       properties:
@@ -26,6 +33,10 @@ targets:
         NSAppTransportSecurity:
           # Dev only: allow http to the local backend. Tighten before release.
           NSAllowsLocalNetworking: true
+        CFBundleURLTypes:
+          # Custom-scheme callback for Auth0 WebAuth (matches the bundle id).
+          - CFBundleURLSchemes:
+              - $(PRODUCT_BUNDLE_IDENTIFIER)
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:

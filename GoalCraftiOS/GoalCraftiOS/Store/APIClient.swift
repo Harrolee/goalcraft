@@ -7,10 +7,18 @@ struct APIClient {
     var baseURL: URL
     var tokenProvider: () -> String? = { nil }
 
-    static let shared = APIClient(
-        baseURL: URL(string: ProcessInfo.processInfo.environment["GOALCRAFT_API"]
-                     ?? "http://localhost:8000/api")!
-    )
+    static let shared: APIClient = {
+        // Release builds hit the deployed backend; debug builds hit local.
+        // Override either with the GOALCRAFT_API environment variable.
+        #if DEBUG
+        let fallback = "http://localhost:8000/api"
+        #else
+        let fallback = "https://goalcraft-backend-342572871397.us-central1.run.app/api"
+        #endif
+        let base = ProcessInfo.processInfo.environment["GOALCRAFT_API"] ?? fallback
+        return APIClient(baseURL: URL(string: base)!,
+                         tokenProvider: { TokenStore.shared.bearer })
+    }()
 
     // MARK: JSON coders
 
